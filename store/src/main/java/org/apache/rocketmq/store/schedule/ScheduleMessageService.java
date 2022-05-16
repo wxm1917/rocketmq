@@ -376,6 +376,7 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         public void executeOnTimeup() {
+            // 获取指定延迟等级的ConsumeQueue
             ConsumeQueue cq =
                 ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
                     delayLevel2QueueId(delayLevel));
@@ -409,6 +410,7 @@ public class ScheduleMessageService extends ConfigManager {
                 for (; i < bufferCQ.getSize() && isStarted(); i += ConsumeQueue.CQ_STORE_UNIT_SIZE) {
                     long offsetPy = bufferCQ.getByteBuffer().getLong();
                     int sizePy = bufferCQ.getByteBuffer().getInt();
+                    //
                     long tagsCode = bufferCQ.getByteBuffer().getLong();
 
                     if (cq.isExtAddr(tagsCode)) {
@@ -424,9 +426,11 @@ public class ScheduleMessageService extends ConfigManager {
                     }
 
                     long now = System.currentTimeMillis();
+                    // 计算消息被投递出去的时间点
                     long deliverTimestamp = this.correctDeliverTimestamp(now, tagsCode);
                     nextOffset = offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE);
 
+                    // 延时消息是否到期，到期则写入真实ConsumeQueue，没有则等待下次调度
                     long countdown = deliverTimestamp - now;
                     if (countdown > 0) {
                         this.scheduleNextTimerTask(nextOffset, DELAY_FOR_A_WHILE);
@@ -475,10 +479,12 @@ public class ScheduleMessageService extends ConfigManager {
 
         private boolean syncDeliver(MessageExtBrokerInner msgInner, String msgId, long offset, long offsetPy,
             int sizePy) {
+            // 写入CommitLog，最终写入真实的队列
             PutResultProcess resultProcess = deliverMessage(msgInner, msgId, offset, offsetPy, sizePy, false);
             PutMessageResult result = resultProcess.get();
             boolean sendStatus = result != null && result.getPutMessageStatus() == PutMessageStatus.PUT_OK;
             if (sendStatus) {
+                // 更新当前延迟等级需要消费的Offset
                 ScheduleMessageService.this.updateOffset(this.delayLevel, resultProcess.getNextOffset());
             }
             return sendStatus;

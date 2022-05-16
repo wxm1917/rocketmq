@@ -38,7 +38,7 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.protocol.body.ProcessQueueInfo;
 
 /**
- * Queue consumption snapshot
+ * Queue consumption snapshot，本地的缓存队列，和MessageQueue一一对应
  */
 public class ProcessQueue {
     public final static long REBALANCE_LOCK_MAX_LIVE_TIME =
@@ -189,6 +189,10 @@ public class ProcessQueue {
     }
 
     public long removeMessage(final List<MessageExt> msgs) {
+        // 1. msgTreeMap中保存pull的消息，<Offset, Msg>，按照Offset升序排序
+        // 2. msgTreeMap移除消费成功的消息
+        // 3. 如果都消费成功了，则返回this.queueOffsetMax + 1;
+        // 4. 如果是部分消费成功了，则返回第一个还未消费成功的Offset（有可能大于该Offset的也消费成功了），这样能够保证提交的Offset都已经消费成功或者已经重发给Broker了
         long result = -1;
         final long now = System.currentTimeMillis();
         try {

@@ -236,11 +236,13 @@ public class MQClientInstance {
                     this.mQClientAPIImpl.start();
                     // Start various schedule tasks
                     this.startScheduledTask();
-                    // Start pull service
+                    // Start pull service，开启拉消息服务(Consumer)
                     this.pullMessageService.start();
-                    // Start rebalance service
+                    // Start rebalance service，开启负载均衡服务，一个线程定时触发rebalance(20秒一次)
                     this.rebalanceService.start();
                     // Start push service
+                    // 初始化一个自用的producer，`CLIENT_INNER_PRODUCER`
+                    // 主要用于在消费失败或者超时后发送重试的消息给broker
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
                     this.serviceState = ServiceState.RUNNING;
@@ -293,6 +295,8 @@ public class MQClientInstance {
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
 
+        // 持久化消费者的Offset
+        // 保存消费进度，广播消息存在本地，集群消息上传到所有的broker
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -305,6 +309,7 @@ public class MQClientInstance {
             }
         }, 1000 * 10, this.clientConfig.getPersistConsumerOffsetInterval(), TimeUnit.MILLISECONDS);
 
+        // 根据负载调整本地处理消息的线程池corePool大小
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
