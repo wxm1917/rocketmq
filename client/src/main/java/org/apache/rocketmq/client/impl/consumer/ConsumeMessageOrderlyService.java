@@ -429,10 +429,13 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
                 return;
             }
 
-            // 先锁住MessageQueue，防止ReBalance导致当前MessageQueue被其他消费者消费
+            // 1. Rebalance.lockAll()会锁住MessageQueue，防止ReBalance导致被其他消费者消费，this.processQueue.isLocked()用来判断是否锁住了MessageQueue
+            // 2. 当前消费线程锁住MessageQueue，保证同一时间只有一个线程消费MessageQueue
+
+            //1、获取消息Queue锁对象，加互斥锁，保证同一个MessageQueue同时只会有一个线程在处理消息
             final Object objLock = messageQueueLock.fetchLockObject(this.messageQueue);
             synchronized (objLock) {
-                // 同时还要锁住ProcessQueue，同一时间只能有一个线程消费ProcessQueue，保证顺序消费
+                //2、Cluster模式，检查ProcessQueue的状态是否仍然是已锁定
                 if (MessageModel.BROADCASTING.equals(ConsumeMessageOrderlyService.this.defaultMQPushConsumerImpl.messageModel())
                     || (this.processQueue.isLocked() && !this.processQueue.isLockExpired())) {
                     final long beginTime = System.currentTimeMillis();
